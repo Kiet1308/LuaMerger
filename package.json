@@ -1,0 +1,65 @@
+{
+  "name": "lua-bundler",
+  "displayName": "Lua Bundler",
+  "description": "Bundle multiple Lua files into a single runnable output.",
+  "version": "1.0.0",
+  "publisher": "your-name",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [
+    "onLanguage:lua"
+  ],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "luaBundler.bundle",
+        "title": "Lua: Bundle Files"
+      },
+      {
+        "command": "luaBundler.bundleWithConfig",
+        "title": "Lua: Bundle with Config"
+      }
+    ],
+    "configuration": {
+      "title": "Lua Bundler",
+      "properties": {
+        "luaBundler.outputFileName": {
+          "type": "string",
+          "default": "output.lua",
+          "description": "Output file name"
+        },
+        "luaBundler.entryPoint": {
+          "type": "string",
+          "default": "init.lua",
+          "description": "Entry point file"
+        },
+        "luaBundler.minify": {
+          "type": "boolean",
+          "default": false,
+          "description": "Minify bundled output"
+        }
+      }
+    }
+  },
+  "scripts": {
+    "build": "tsc -p .",
+    "watch": "tsc -w",
+    "test": "mocha -r ts-node/register test/**/*.test.ts",
+    "package": "echo \"Use vsce package after building\""
+  },
+  "devDependencies": {
+    "@types/chai": "^4.3.11",
+    "@types/mocha": "^10.0.6",
+    "@types/node": "^22.0.0",
+    "@types/vscode": "^1.90.0",
+    "chai": "^4.4.1",
+    "mocha": "^10.7.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.5"
+  }
+}
