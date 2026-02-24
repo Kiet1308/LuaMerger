@@ -2,7 +2,7 @@
   "name": "lua-bundler",
   "displayName": "Lua Bundler",
   "description": "Bundle multiple Lua files into a single runnable output.",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "publisher": "your-name",
   "engines": {
     "vscode": "^1.90.0"

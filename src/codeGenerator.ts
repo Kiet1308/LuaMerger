@@ -86,8 +86,8 @@ export class CodeGenerator {
 
     const lines = ['-- Initialize module tree'];
     for (const folder of folders) {
-      const treePath = folder.split('/').join('.');
-      lines.push(`__modules.${treePath} = __modules.${treePath} or {}`);
+      const folderAccess = this.toModuleTreeAccess(folder);
+      lines.push(`${folderAccess} = ${folderAccess} or {}`);
     }
     lines.push('');
     return lines.join('\n');
@@ -110,6 +110,8 @@ export class CodeGenerator {
       '-- Module cache (tree-based storage with flat key fallback)',
       'local __modules = {}',
       'local __loaded = {}',
+      '-- Shared state across bundled modules and scripts',
+      'local SHARED_VAR = {}',
       '',
       '-- Get module loader: check flat key first, then tree navigation',
       'local function __getModule(name)',
@@ -168,8 +170,8 @@ export class CodeGenerator {
 
     // Use flat key if parent is a module, otherwise use tree path
     const moduleKey = hasParentModule
-      ? `__modules["${module.moduleName}"]`
-      : `__modules.${parts.join('.')}`;
+      ? `__modules[${this.toLuaStringLiteral(module.moduleName)}]`
+      : this.toModuleTreeAccess(module.moduleName);
 
     const lines = [
       `-- Module: ${module.moduleName}`,
@@ -223,5 +225,20 @@ export class CodeGenerator {
       .map((line) => line.trim())
       .filter((line) => line.length > 0)
       .join('\n');
+  }
+
+  private toModuleTreeAccess(modulePath: string): string {
+    const parts = modulePath.split('/').filter((part) => part.length > 0);
+    if (parts.length === 0) {
+      return `__modules[${this.toLuaStringLiteral(modulePath)}]`;
+    }
+    return parts.reduce(
+      (expr, part) => `${expr}[${this.toLuaStringLiteral(part)}]`,
+      '__modules',
+    );
+  }
+
+  private toLuaStringLiteral(value: string): string {
+    return JSON.stringify(value);
   }
 }

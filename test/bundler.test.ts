@@ -29,6 +29,24 @@ describe('Lua Bundler building blocks', () => {
     expect(result.requires[1].modulePath).to.equal('plain');
   });
 
+  it('ignores require statements inside block comments', () => {
+    const parser = new LuaParser();
+    const content = [
+      'local Module1 = require("module1")',
+      '--[[ require("skipInline") ]]',
+      '--[[',
+      'local SkipBlock = require("skipBlock")',
+      ']]',
+      '--[=[',
+      'local SkipEqBlock = require("skipEqBlock")',
+      ']=]',
+      'require("plain")',
+    ].join('\n');
+    const result = parser.parse(content, 'file.lua');
+    expect(result.requires).to.have.length(2);
+    expect(result.requires.map((req) => req.modulePath)).to.deep.equal(['module1', 'plain']);
+  });
+
   it('resolves relative and dot notation paths', () => {
     const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'lua-bundler-'));
     const entry = writeLua(tmp, 'main.lua', 'local m = require("./lib/util")');
@@ -84,8 +102,76 @@ describe('Lua Bundler building blocks', () => {
       preserveRequireNames: true,
     });
     const output = generator.generate(graph, 'main');
-    expect(output).to.contain('__modules.moduleA');
+    expect(output).to.contain('__modules["moduleA"]');
     expect(output).to.contain('-- ENTRY POINT');
+  });
+
+  it('generates safe module access for non-identifier module names', () => {
+    const graph = new DependencyGraph();
+    const moduleA: ModuleNode = {
+      moduleName: 'features/auto-farm',
+      path: 'features/auto-farm.lua',
+      dependencies: [],
+      content: 'return {}',
+      parseResult: { requires: [], codeWithoutRequires: '', originalCode: '' },
+    };
+    const entry: ModuleNode = {
+      moduleName: 'main',
+      path: 'main.lua',
+      dependencies: ['features/auto-farm'],
+      content: 'local AutoFarm = __require("features/auto-farm")',
+      parseResult: { requires: [], codeWithoutRequires: '', originalCode: '' },
+    };
+    graph.addModule('features/auto-farm', moduleA);
+    graph.addModule('main', entry);
+
+    const generator = new CodeGenerator({
+      addComments: false,
+      minify: false,
+      includeSourceMap: false,
+      preserveRequireNames: true,
+    });
+    const output = generator.generate(graph, 'main');
+    expect(output).to.contain('__modules["features"] = __modules["features"] or {}');
+    expect(output).to.contain('__modules["features"]["auto-farm"] = function()');
+    expect(output).to.not.contain('__modules.features.auto-farm');
+  });
+
+  it('declares shared bundle variable before module wrappers', () => {
+    const graph = new DependencyGraph();
+    const moduleA: ModuleNode = {
+      moduleName: 'moduleA',
+      path: 'moduleA.lua',
+      dependencies: [],
+      content: 'SHARED_VAR.count = (SHARED_VAR.count or 0) + 1\nreturn SHARED_VAR',
+      parseResult: { requires: [], codeWithoutRequires: '', originalCode: '' },
+    };
+    const entry: ModuleNode = {
+      moduleName: 'main',
+      path: 'main.lua',
+      dependencies: ['moduleA'],
+      content: 'local shared = __require("moduleA")\nSHARED_VAR.ready = shared.count',
+      parseResult: { requires: [], codeWithoutRequires: '', originalCode: '' },
+    };
+    graph.addModule('moduleA', moduleA);
+    graph.addModule('main', entry);
+
+    const generator = new CodeGenerator({
+      addComments: false,
+      minify: false,
+      includeSourceMap: false,
+      preserveRequireNames: true,
+    });
+
+    const output = generator.generate(graph, 'main');
+    const sharedVarIndex = output.indexOf('local SHARED_VAR = {}');
+    const moduleWrapperIndex = output.indexOf('__modules["moduleA"] = function()');
+
+    expect(sharedVarIndex).to.be.greaterThan(-1);
+    expect(moduleWrapperIndex).to.be.greaterThan(-1);
+    expect(sharedVarIndex).to.be.lessThan(moduleWrapperIndex);
+    expect(output).to.contain('SHARED_VAR.count = (SHARED_VAR.count or 0) + 1');
+    expect(output).to.contain('SHARED_VAR.ready = shared.count');
   });
 
   it('derives module names from file paths', () => {
