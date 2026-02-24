@@ -1,4 +1,4 @@
-﻿# Lua Bundler
+# Lua Bundler
 
 <p align="center">
   <img src="https://img.shields.io/badge/VS%20Code-Extension-blue?style=for-the-badge&logo=visual-studio-code" alt="VS Code Extension"/>
@@ -11,40 +11,40 @@ A powerful VS Code extension that bundles multiple Lua files into a single, runn
 
 ---
 
-## âœ¨ Features
+## Features
 
-### ðŸ”— **Smart Module Resolution**
+### Smart Module Resolution
 - Resolves `require()` statements with relative paths (`./`, `../`)
 - Supports both dot notation (`Utils.Logger`) and slash notation (`Utils/Logger`)
 - Automatically handles nested module dependencies
 
-### ðŸ“ **Folder-Based Modules**
+### Folder-Based Modules
 - **init.lua Support**: Folders with `init.lua` are treated as single modules
 - **Folder Require**: Require an entire folder as a table of modules (for folders without `init.lua`)
 - Tree-based module storage with flat key fallback for conflict-free module organization
 
-### âš¡ **Client Scripts**
+### Client Scripts
 - `.client.lua` files are automatically detected and wrapped in `task.spawn()`
 - Execute parallel scripts alongside the main bundle
 - Great for Roblox client-side scripting patterns
 
-### ðŸ›¡ï¸ **Circular Dependency Detection**
+### Circular Dependency Detection
 - Detects and reports circular dependencies before bundling
 - Prevents runtime errors from module loading loops
 
-### ðŸ“Š **Topological Sorting**
+### Topological Sorting
 - Modules are ordered correctly based on dependencies
 - Ensures modules are defined before they are required
 
 ---
 
-## ðŸ“¥ Installation
+## Installation
 
 ### From VSIX File
 1. Download `lua-bundler-1.2.0.vsix` from the releases
 2. Open VS Code
 3. Go to Extensions (Ctrl+Shift+X)
-4. Click `...` â†’ `Install from VSIX...`
+4. Click `...` -> `Install from VSIX...`
 5. Select the downloaded file
 
 ### From Source
@@ -58,11 +58,11 @@ Then press `F5` in VS Code to launch the Extension Development Host.
 
 ---
 
-## ðŸš€ Usage
+## Usage
 
 ### Quick Bundle
 1. Open any Lua project in VS Code
-2. Click the **ðŸ“¦ Bundle Lua** button in the status bar
+2. Click the **Bundle Lua** button in the status bar
 3. The bundled output will be saved to `output.lua`
 
 ### Command Palette
@@ -74,15 +74,15 @@ Right-click any `.lua` file in the explorer and select **Lua: Bundle Files** to 
 
 ---
 
-## âš™ï¸ Configuration
+## Configuration
 
 Configure the extension in VS Code settings (`settings.json`):
 
 ```json
 {
-  "luaBundler.entryPoint": "init.lua",      // Entry point file
-  "luaBundler.outputFileName": "output.lua", // Output file name
-  "luaBundler.minify": false                 // Minify output
+  "luaBundler.entryPoint": "init.lua",
+  "luaBundler.outputFileName": "output.lua",
+  "luaBundler.minify": false
 }
 ```
 
@@ -94,34 +94,34 @@ Configure the extension in VS Code settings (`settings.json`):
 
 ---
 
-## ðŸ“ Project Structure Example
+## Project Structure Example
 
-```
+```text
 MyProject/
-â”œâ”€â”€ init.lua                    # Entry point
-â”œâ”€â”€ output.lua                  # Generated bundle
-â”œâ”€â”€ Utils/
-â”‚   â”œâ”€â”€ Config.lua
-â”‚   â”œâ”€â”€ Logger.lua
-â”‚   â””â”€â”€ Helpers.lua
-â”œâ”€â”€ Classes/
-â”‚   â”œâ”€â”€ Entity.lua
-â”‚   â””â”€â”€ Player.lua
-â”œâ”€â”€ Services/
-â”‚   â”œâ”€â”€ init.lua               # Folder acts as single module
-â”‚   â”œâ”€â”€ DataService.lua
-â”‚   â””â”€â”€ NetworkService.lua
-â”œâ”€â”€ Features/                   # Folder without init.lua
-â”‚   â”œâ”€â”€ AutoFarm.lua           # Can be required as table
-â”‚   â”œâ”€â”€ ESP.lua
-â”‚   â””â”€â”€ Teleport.lua
-â”œâ”€â”€ UI.client.lua              # Wrapped in task.spawn()
-â””â”€â”€ InputHandler.client.lua    # Parallel execution
+|-- init.lua                    # Entry point
+|-- output.lua                  # Generated bundle
+|-- Utils/
+|   |-- Config.lua
+|   |-- Logger.lua
+|   `-- Helpers.lua
+|-- Classes/
+|   |-- Entity.lua
+|   `-- Player.lua
+|-- Services/
+|   |-- init.lua               # Folder acts as single module
+|   |-- DataService.lua
+|   `-- NetworkService.lua
+|-- Features/                  # Folder without init.lua
+|   |-- AutoFarm.lua           # Can be required as table
+|   |-- ESP.lua
+|   `-- Teleport.lua
+|-- UI.client.lua              # Wrapped in task.spawn()
+`-- InputHandler.client.lua    # Parallel execution
 ```
 
 ---
 
-## ðŸ“ Require Syntax
+## Require Syntax
 
 The bundler supports multiple require syntaxes:
 
@@ -145,25 +145,27 @@ local Features = require("./Features")
 
 ---
 
-## ðŸ“¤ Output Format
+## Output Format
 
 The bundler generates a self-contained Lua file with:
 
 1. **Header**: Metadata about the bundle (timestamp, entry point)
 2. **Runtime**: Module loading system with `__require`, `__getModule`, `__requireFolder`
-3. **Module Tree**: Folder structure initialization
-4. **Modules**: Each module wrapped as a function
-5. **Client Scripts**: `.client.lua` files in `task.spawn()` wrappers
-6. **Entry Point**: Main code execution
+3. **Shared State**: Global shared table `SHARED_VAR`
+4. **Module Tree**: Folder structure initialization
+5. **Modules**: Each module wrapped as a function
+6. **Client Scripts**: `.client.lua` files in `task.spawn()` wrappers
+7. **Entry Point**: Main code execution
 
 Example output structure:
 ```lua
 -- Bundled by Lua Bundler
--- Generated: 2025-12-07T16:06:21.481Z
+-- Generated: 2026-02-24T00:00:00.000Z
 -- Entry: init
 
 local __modules = {}
 local __loaded = {}
+local SHARED_VAR = {}
 
 local function __require(name)
     -- Module loading logic
@@ -174,7 +176,7 @@ local function __requireFolder(folderPath)
 end
 
 -- Module: Utils/Config
-__modules.Utils.Config = function()
+__modules["Utils"]["Config"] = function()
     -- Module code here
 end
 
@@ -191,7 +193,7 @@ end
 
 ---
 
-## ðŸ”§ Development
+## Development
 
 ### Building
 ```bash
@@ -211,12 +213,12 @@ npm run watch
 
 ### Packaging
 ```bash
-npx vsce package
+npx @vscode/vsce package
 ```
 
 ---
 
-## ðŸ—ï¸ Architecture
+## Architecture
 
 | File | Purpose |
 |------|---------|
@@ -230,7 +232,7 @@ npx vsce package
 
 ---
 
-## ðŸŽ® Roblox Integration
+## Roblox Integration
 
 This bundler is designed with Roblox development in mind:
 
@@ -240,15 +242,15 @@ This bundler is designed with Roblox development in mind:
 
 ---
 
-## ðŸ“„ License
+## License
 
-MIT License - feel free to use this in your projects!
+MIT License - feel free to use this in your projects.
 
 ---
 
-## ðŸ¤ Contributing
+## Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+Contributions are welcome. Please feel free to submit a Pull Request.
 
 1. Fork the repository
 2. Create your feature branch (`git checkout -b feature/AmazingFeature`)
@@ -259,12 +261,12 @@ Contributions are welcome! Please feel free to submit a Pull Request.
 ---
 
 <p align="center">
-  Made with â¤ï¸ for the Lua community
+  Made with love for the Lua community
 </p>
 
 ---
 
 ## Shared Runtime Variable
 
-Bundled output now declares `local SHARED_VAR = {}` in runtime scope.
+Bundled output declares `local SHARED_VAR = {}` in runtime scope.
 `SHARED_VAR` can be accessed by all bundled modules, the entry script, and `.client.lua` scripts.
