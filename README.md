@@ -4,7 +4,7 @@
   <img src="https://img.shields.io/badge/VS%20Code-Extension-blue?style=for-the-badge&logo=visual-studio-code" alt="VS Code Extension"/>
   <img src="https://img.shields.io/badge/Language-Lua-purple?style=for-the-badge&logo=lua" alt="Lua"/>
   <img src="https://img.shields.io/badge/TypeScript-Built-3178C6?style=for-the-badge&logo=typescript" alt="TypeScript"/>
-  <img src="https://img.shields.io/badge/Version-1.2.0-green?style=for-the-badge" alt="Version 1.2.0"/>
+  <img src="https://img.shields.io/badge/Version-1.3.0-green?style=for-the-badge" alt="Version 1.3.0"/>
 </p>
 
 A powerful VS Code extension that bundles multiple Lua files into a single, runnable output file. Perfect for Roblox development, game scripting, and any Lua project that requires modular code organization.
@@ -21,7 +21,7 @@ A powerful VS Code extension that bundles multiple Lua files into a single, runn
 ### Folder-Based Modules
 - **init.lua Support**: Folders with `init.lua` are treated as single modules
 - **Folder Require**: Require an entire folder as a table of modules (for folders without `init.lua`)
-- Tree-based module storage with flat key fallback for conflict-free module organization
+- Flat module loader keys + independent module tree for deterministic folder traversal
 
 ### Client Scripts
 - `.client.lua` files are automatically detected and wrapped in `task.spawn()`
@@ -41,7 +41,7 @@ A powerful VS Code extension that bundles multiple Lua files into a single, runn
 ## Installation
 
 ### From VSIX File
-1. Download `lua-bundler-1.2.0.vsix` from the releases
+1. Download `lua-bundler-1.3.0.vsix` from the releases
 2. Open VS Code
 3. Go to Extensions (Ctrl+Shift+X)
 4. Click `...` -> `Install from VSIX...`
@@ -150,7 +150,7 @@ local Features = require("./Features")
 The bundler generates a self-contained Lua file with:
 
 1. **Header**: Metadata about the bundle (timestamp, entry point)
-2. **Runtime**: Module loading system with `__require`, `__getModule`, `__requireFolder`
+2. **Runtime**: Module loading system with `__require`, `__getTreeNode`, `__requireFolder`
 3. **Shared State**: Global shared table `SHARED_VAR`
 4. **Module Tree**: Folder structure initialization
 5. **Modules**: Each module wrapped as a function
@@ -164,6 +164,7 @@ Example output structure:
 -- Entry: init
 
 local __modules = {}
+local __moduleTree = {}
 local __loaded = {}
 local SHARED_VAR = {}
 
@@ -176,7 +177,7 @@ local function __requireFolder(folderPath)
 end
 
 -- Module: Utils/Config
-__modules["Utils"]["Config"] = function()
+__modules["Utils/Config"] = function()
     -- Module code here
 end
 

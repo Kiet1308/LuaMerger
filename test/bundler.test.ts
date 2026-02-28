@@ -132,9 +132,56 @@ describe('Lua Bundler building blocks', () => {
       preserveRequireNames: true,
     });
     const output = generator.generate(graph, 'main');
-    expect(output).to.contain('__modules["features"] = __modules["features"] or {}');
-    expect(output).to.contain('__modules["features"]["auto-farm"] = function()');
+    expect(output).to.contain('__moduleTree["features"] = __moduleTree["features"] or {}');
+    expect(output).to.contain('__moduleTree["features"]["auto-farm"] = __moduleTree["features"]["auto-farm"] or {}');
+    expect(output).to.contain('__moduleTree["features"]["auto-farm"]["__init"] = "features/auto-farm"');
+    expect(output).to.contain('__modules["features/auto-farm"] = function()');
     expect(output).to.not.contain('__modules.features.auto-farm');
+  });
+
+  it('avoids parent nil indexing when folder init module also has nested modules', () => {
+    const graph = new DependencyGraph();
+    const guiBuilder: ModuleNode = {
+      moduleName: 'GuiBuilder',
+      path: 'GuiBuilder/init.lua',
+      dependencies: ['GuiBuilder/Internal/Builder'],
+      content: 'local Builder = __require("GuiBuilder/Internal/Builder")\nreturn Builder',
+      parseResult: { requires: [], codeWithoutRequires: '', originalCode: '' },
+    };
+    const internalBuilder: ModuleNode = {
+      moduleName: 'GuiBuilder/Internal/Builder',
+      path: 'GuiBuilder/Internal/Builder.lua',
+      dependencies: [],
+      content: 'return { ok = true }',
+      parseResult: { requires: [], codeWithoutRequires: '', originalCode: '' },
+    };
+    const entry: ModuleNode = {
+      moduleName: 'main',
+      path: 'main.lua',
+      dependencies: ['GuiBuilder'],
+      content: 'local Builder = __require("GuiBuilder")\nreturn Builder',
+      parseResult: { requires: [], codeWithoutRequires: '', originalCode: '' },
+    };
+    graph.addModule('GuiBuilder', guiBuilder);
+    graph.addModule('GuiBuilder/Internal/Builder', internalBuilder);
+    graph.addModule('main', entry);
+
+    const generator = new CodeGenerator({
+      addComments: false,
+      minify: false,
+      includeSourceMap: false,
+      preserveRequireNames: true,
+    });
+    const output = generator.generate(graph, 'main');
+
+    expect(output).to.contain('local __moduleTree = {}');
+    expect(output).to.contain('__moduleTree["GuiBuilder"] = __moduleTree["GuiBuilder"] or {}');
+    expect(output).to.contain('__moduleTree["GuiBuilder"]["Internal"] = __moduleTree["GuiBuilder"]["Internal"] or {}');
+    expect(output).to.contain('__moduleTree["GuiBuilder"]["Internal"]["Builder"] = __moduleTree["GuiBuilder"]["Internal"]["Builder"] or {}');
+    expect(output).to.contain('__moduleTree["GuiBuilder"]["Internal"]["Builder"]["__init"] = "GuiBuilder/Internal/Builder"');
+    expect(output).to.contain('__modules["GuiBuilder"] = function()');
+    expect(output).to.contain('__modules["GuiBuilder/Internal/Builder"] = function()');
+    expect(output).to.not.contain('__modules["GuiBuilder"]["Internal"] =');
   });
 
   it('declares shared bundle variable before module wrappers', () => {

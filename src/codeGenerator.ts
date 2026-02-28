@@ -18,22 +18,19 @@ export class CodeGenerator {
       order.push(entryModule);
     }
 
-    // Get all module names for conflict detection
-    const allModuleNames = new Set(order);
+    const nonEntryModules = order.filter((m) => m !== entryModule);
 
     let output = '';
     output += this.generateHeader(entryModule);
     output += this.generateRuntime();
 
     // Collect unique folder paths for tree initialization
-    const folders = this.collectFolderPaths(order.filter(m => m !== entryModule));
+    const folders = this.collectFolderPaths(nonEntryModules);
     output += this.generateFolderDeclarations(folders);
+    output += this.generateModuleTreeRegistrations(nonEntryModules);
 
-    for (const moduleName of order) {
-      if (moduleName === entryModule) {
-        continue;
-      }
-      output += this.generateModuleWrapper(graph.getModule(moduleName), allModuleNames);
+    for (const moduleName of nonEntryModules) {
+      output += this.generateModuleWrapper(graph.getModule(moduleName));
     }
 
     // Generate client scripts with task.spawn
@@ -52,21 +49,16 @@ export class CodeGenerator {
 
   /**
    * Collect all unique folder paths that need initialization.
-   * Excludes paths that are also module names (init.lua modules) to avoid conflicts.
    */
   private collectFolderPaths(moduleNames: string[]): string[] {
     const folders = new Set<string>();
-    const moduleNameSet = new Set(moduleNames);
 
     for (const moduleName of moduleNames) {
       const parts = moduleName.split('/');
       // Build up folder paths: "Features", "Features/SubFolder", etc.
       for (let i = 1; i < parts.length; i++) {
         const folderPath = parts.slice(0, i).join('/');
-        // Only add if this folder is NOT also a module (init.lua case)
-        if (!moduleNameSet.has(folderPath)) {
-          folders.add(folderPath);
-        }
+        folders.add(folderPath);
       }
     }
 
@@ -74,7 +66,10 @@ export class CodeGenerator {
     return Array.from(folders).sort((a, b) => {
       const depthA = a.split('/').length;
       const depthB = b.split('/').length;
-      return depthA - depthB;
+      if (depthA !== depthB) {
+        return depthA - depthB;
+      }
+      return a.localeCompare(b);
     });
   }
 
@@ -86,9 +81,32 @@ export class CodeGenerator {
 
     const lines = ['-- Initialize module tree'];
     for (const folder of folders) {
-      const folderAccess = this.toModuleTreeAccess(folder);
+      const folderAccess = this.toModuleTreeAccess(folder, '__moduleTree');
       lines.push(`${folderAccess} = ${folderAccess} or {}`);
     }
+    lines.push('');
+    return lines.join('\n');
+  }
+
+  private generateModuleTreeRegistrations(moduleNames: string[]): string {
+    if (moduleNames.length === 0) return '';
+
+    const lines = ['-- Register module names in tree'];
+    const sorted = Array.from(new Set(moduleNames)).sort((a, b) => {
+      const depthA = a.split('/').length;
+      const depthB = b.split('/').length;
+      if (depthA !== depthB) {
+        return depthA - depthB;
+      }
+      return a.localeCompare(b);
+    });
+
+    for (const moduleName of sorted) {
+      const moduleAccess = this.toModuleTreeAccess(moduleName, '__moduleTree');
+      lines.push(`${moduleAccess} = ${moduleAccess} or {}`);
+      lines.push(`${moduleAccess}["__init"] = ${this.toLuaStringLiteral(moduleName)}`);
+    }
+
     lines.push('');
     return lines.join('\n');
   }
@@ -107,18 +125,16 @@ export class CodeGenerator {
 
   private generateRuntime(): string {
     return [
-      '-- Module cache (tree-based storage with flat key fallback)',
+      '-- Module cache (flat key loaders + independent folder tree)',
       'local __modules = {}',
+      'local __moduleTree = {}',
       'local __loaded = {}',
       '-- Shared state across bundled modules and scripts',
       'local SHARED_VAR = {}',
       '',
-      '-- Get module loader: check flat key first, then tree navigation',
-      'local function __getModule(name)',
-      '    -- First check flat key (for modules under init.lua folders)',
-      '    if __modules[name] then return __modules[name] end',
-      '    -- Then try tree navigation',
-      '    local current = __modules',
+      '-- Navigate folder tree by slash-separated module path',
+      'local function __getTreeNode(name)',
+      '    local current = __moduleTree',
       '    for part in name:gmatch("[^/]+") do',
       '        if type(current) ~= "table" then return nil end',
       '        current = current[part]',
@@ -127,10 +143,10 @@ export class CodeGenerator {
       '    return current',
       'end',
       '',
-      '-- Custom require that navigates module tree',
+      '-- Custom require that resolves bundled modules by exact path',
       'local function __require(name)',
       '    if __loaded[name] then return __loaded[name] end',
-      '    local loader = __getModule(name)',
+      '    local loader = __modules[name]',
       '    if type(loader) == "function" then',
       '        __loaded[name] = loader()',
       '        return __loaded[name]',
@@ -138,14 +154,14 @@ export class CodeGenerator {
       '    return require(name)',
       'end',
       '',
-      '-- Folder require - returns table of all modules in folder',
+      '-- Folder require - returns direct child modules in a folder',
       'local function __requireFolder(folderPath)',
-      '    local folder = __getModule(folderPath)',
+      '    local folder = __getTreeNode(folderPath)',
       '    if type(folder) ~= "table" then return {} end',
       '    local result = {}',
-      '    for name, loader in pairs(folder) do',
-      '        if type(loader) == "function" then',
-      '            result[name] = __require(folderPath .. "/" .. name)',
+      '    for name, node in pairs(folder) do',
+      '        if name ~= "__init" and type(node) == "table" and type(node["__init"]) == "string" then',
+      '            result[name] = __require(node["__init"])',
       '        end',
       '    end',
       '    return result',
@@ -154,29 +170,11 @@ export class CodeGenerator {
     ].join('\n');
   }
 
-  private generateModuleWrapper(module: ModuleNode, allModuleNames: Set<string>): string {
-    // Check if any parent path of this module is also a module (init.lua case)
-    // If so, we need to use flat key to avoid conflicts
-    const parts = module.moduleName.split('/');
-    let hasParentModule = false;
-
-    for (let i = 1; i < parts.length; i++) {
-      const parentPath = parts.slice(0, i).join('/');
-      if (allModuleNames.has(parentPath)) {
-        hasParentModule = true;
-        break;
-      }
-    }
-
-    // Use flat key if parent is a module, otherwise use tree path
-    const moduleKey = hasParentModule
-      ? `__modules[${this.toLuaStringLiteral(module.moduleName)}]`
-      : this.toModuleTreeAccess(module.moduleName);
-
+  private generateModuleWrapper(module: ModuleNode): string {
     const lines = [
       `-- Module: ${module.moduleName}`,
       `-- Source: ${module.path}`,
-      `${moduleKey} = function()`,
+      `__modules[${this.toLuaStringLiteral(module.moduleName)}] = function()`,
       this.indent(module.content),
       'end',
       '',
@@ -227,14 +225,14 @@ export class CodeGenerator {
       .join('\n');
   }
 
-  private toModuleTreeAccess(modulePath: string): string {
+  private toModuleTreeAccess(modulePath: string, rootVar: string): string {
     const parts = modulePath.split('/').filter((part) => part.length > 0);
     if (parts.length === 0) {
-      return `__modules[${this.toLuaStringLiteral(modulePath)}]`;
+      return `${rootVar}[${this.toLuaStringLiteral(modulePath)}]`;
     }
     return parts.reduce(
       (expr, part) => `${expr}[${this.toLuaStringLiteral(part)}]`,
-      '__modules',
+      rootVar,
     );
   }
 
