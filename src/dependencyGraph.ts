@@ -3,6 +3,7 @@ import { ParseResult } from './parser';
 export interface ModuleNode {
   moduleName: string;
   path: string;
+  displayPath?: string;
   dependencies: string[];
   content: string;
   parseResult: ParseResult;

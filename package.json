@@ -2,8 +2,13 @@
   "name": "lua-bundler",
   "displayName": "Lua Bundler",
   "description": "Bundle multiple Lua files into a single runnable output.",
-  "version": "1.3.0",
+  "version": "1.4.0",
   "publisher": "your-name",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/Kiet1308/LuaMerger.git"
+  },
   "engines": {
     "vscode": "^1.90.0"
   },
@@ -23,6 +28,10 @@
       {
         "command": "luaBundler.bundleWithConfig",
         "title": "Lua: Bundle with Config"
+      },
+      {
+        "command": "luaBundler.toggleErrorMapping",
+        "title": "Lua: Toggle Error Mapping"
       }
     ],
     "configuration": {
@@ -42,6 +51,11 @@
           "type": "boolean",
           "default": false,
           "description": "Minify bundled output"
+        },
+        "luaBundler.errorMapping": {
+          "type": "boolean",
+          "default": false,
+          "description": "Map runtime errors back to the original Lua files and lines using the clean traceback mode."
         }
       }
     }

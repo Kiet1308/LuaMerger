@@ -11,13 +11,118 @@ function getWorkspaceRoot(): string {
   return folder.uri.fsPath;
 }
 
+function hasExplicitConfigValue<T>(
+  inspection: {
+    globalValue?: T;
+    workspaceValue?: T;
+    workspaceFolderValue?: T;
+  } | undefined,
+): boolean {
+  return Boolean(
+    inspection &&
+    (
+      inspection.globalValue !== undefined ||
+      inspection.workspaceValue !== undefined ||
+      inspection.workspaceFolderValue !== undefined
+    ),
+  );
+}
+
+function getErrorMappingEnabled(config = vscode.workspace.getConfiguration('luaBundler')): boolean {
+  const errorMappingInspection = config.inspect<boolean>('errorMapping');
+  if (hasExplicitConfigValue(errorMappingInspection)) {
+    return config.get<boolean>('errorMapping', false);
+  }
+
+  const cleanTracebackInspection = config.inspect<boolean>('cleanTraceback');
+  const fullFunctionWrappingInspection = config.inspect<boolean>('fullFunctionWrapping');
+  const hasLegacyConfig =
+    hasExplicitConfigValue(cleanTracebackInspection) ||
+    hasExplicitConfigValue(fullFunctionWrappingInspection);
+
+  if (hasLegacyConfig) {
+    return (
+      config.get<boolean>('cleanTraceback', true) ||
+      config.get<boolean>('fullFunctionWrapping', true)
+    );
+  }
+
+  return false;
+}
+
 function getBaseOptions(): BundleOptions {
   const config = vscode.workspace.getConfiguration('luaBundler');
   return {
     entryPoint: config.get<string>('entryPoint', 'init.lua'),
     outputFileName: config.get<string>('outputFileName', 'output.lua'),
     minify: config.get<boolean>('minify', false),
+    errorMapping: getErrorMappingEnabled(config),
   };
+}
+
+function updateStatusBarItems(
+  bundleItem: vscode.StatusBarItem,
+  mappingItem: vscode.StatusBarItem,
+): void {
+  const options = getBaseOptions();
+
+  bundleItem.tooltip = [
+    'Bundle Lua files into a single output.',
+    `Runtime errors: ${options.errorMapping ? 'Mapped to original files' : 'Raw bundle output'}`,
+  ].join('\n');
+
+  mappingItem.text = options.errorMapping
+    ? '$(check) Mapped Errors'
+    : '$(close) Raw Errors';
+
+  mappingItem.tooltip = options.errorMapping
+    ? 'Mapped errors are enabled. Runtime errors will point back to original Lua files and lines. Click to disable.'
+    : 'Mapped errors are disabled. Runtime errors will use raw bundled stack positions. Click to enable clean mapped errors.';
+}
+
+async function pickBooleanOption(
+  placeHolder: string,
+  currentValue: boolean,
+): Promise<boolean> {
+  const choice = await vscode.window.showQuickPick(
+    [
+      {
+        label: 'On',
+        description: currentValue ? 'Current' : undefined,
+      },
+      {
+        label: 'Off',
+        description: !currentValue ? 'Current' : undefined,
+      },
+    ],
+    {
+      placeHolder,
+      canPickMany: false,
+      ignoreFocusOut: true,
+    },
+  );
+
+  if (!choice) {
+    return currentValue;
+  }
+
+  return choice.label === 'On';
+}
+
+async function toggleErrorMapping(): Promise<void> {
+  const config = vscode.workspace.getConfiguration('luaBundler');
+  const current = getErrorMappingEnabled(config);
+  const next = !current;
+  const target = vscode.workspace.workspaceFolders?.length
+    ? vscode.ConfigurationTarget.Workspace
+    : vscode.ConfigurationTarget.Global;
+
+  await config.update('errorMapping', next, target);
+  vscode.window.showInformationMessage(
+    next
+      ? 'Lua Bundler error mapping enabled.'
+      : 'Lua Bundler error mapping disabled.',
+  );
 }
 
 /**
@@ -28,14 +133,13 @@ function findInitLua(startPath: string): { initPath: string; rootDir: string } |
   let currentDir = fs.statSync(startPath).isDirectory() ? startPath : path.dirname(startPath);
   const workspaceRoot = getWorkspaceRoot();
 
-  // Traverse up until we find init.lua or reach workspace root
   while (currentDir.length >= workspaceRoot.length) {
     const initPath = path.join(currentDir, 'init.lua');
     if (fs.existsSync(initPath)) {
       return { initPath, rootDir: currentDir };
     }
     const parentDir = path.dirname(currentDir);
-    if (parentDir === currentDir) break; // Reached filesystem root
+    if (parentDir === currentDir) break;
     currentDir = parentDir;
   }
 
@@ -45,7 +149,6 @@ function findInitLua(startPath: string): { initPath: string; rootDir: string } |
 async function runBundle(uri?: vscode.Uri): Promise<void> {
   const options = getBaseOptions();
 
-  // Get the target file - either from right-click uri or active editor
   let targetPath: string | undefined;
   if (uri) {
     targetPath = uri.fsPath;
@@ -60,7 +163,6 @@ async function runBundle(uri?: vscode.Uri): Promise<void> {
   let entryPath: string;
 
   if (targetPath) {
-    // Find init.lua by traversing up from the target file
     const initInfo = findInitLua(targetPath);
     if (initInfo) {
       workspaceRoot = initInfo.rootDir;
@@ -101,13 +203,20 @@ async function runBundleWithConfig(): Promise<void> {
   const minifyChoice = await vscode.window.showQuickPick(['No', 'Yes'], {
     placeHolder: 'Minify output?',
     canPickMany: false,
+    ignoreFocusOut: true,
   });
   const minify = minifyChoice === 'Yes' ? true : base.minify;
+
+  const errorMapping = await pickBooleanOption(
+    'Map runtime errors back to the original Lua files?',
+    base.errorMapping,
+  );
 
   const bundler = new LuaBundler(workspaceRoot, {
     entryPoint,
     outputFileName,
     minify,
+    errorMapping,
   });
 
   const result = await bundler.bundle();
@@ -141,17 +250,56 @@ export function activate(context: vscode.ExtensionContext): void {
     },
   );
 
-  // Create status bar button for quick bundling
+  const toggleErrorMappingCommand = vscode.commands.registerCommand(
+    'luaBundler.toggleErrorMapping',
+    async () => {
+      try {
+        await toggleErrorMapping();
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        vscode.window.showErrorMessage(`Failed to toggle error mapping: ${message}`);
+      }
+    },
+  );
+
   const statusBarItem = vscode.window.createStatusBarItem(
     vscode.StatusBarAlignment.Left,
-    100
+    100,
   );
   statusBarItem.command = 'luaBundler.bundle';
   statusBarItem.text = '$(package) Bundle Lua';
-  statusBarItem.tooltip = 'Bundle Lua files into a single output';
   statusBarItem.show();
 
-  context.subscriptions.push(bundleCommand, bundleWithConfigCommand, statusBarItem);
+  const mappingStatusBarItem = vscode.window.createStatusBarItem(
+    vscode.StatusBarAlignment.Left,
+    99,
+  );
+  mappingStatusBarItem.command = 'luaBundler.toggleErrorMapping';
+  mappingStatusBarItem.show();
+
+  updateStatusBarItems(statusBarItem, mappingStatusBarItem);
+
+  const configChangeListener = vscode.workspace.onDidChangeConfiguration((event) => {
+    if (
+      event.affectsConfiguration('luaBundler.errorMapping') ||
+      event.affectsConfiguration('luaBundler.cleanTraceback') ||
+      event.affectsConfiguration('luaBundler.fullFunctionWrapping') ||
+      event.affectsConfiguration('luaBundler.outputFileName') ||
+      event.affectsConfiguration('luaBundler.entryPoint') ||
+      event.affectsConfiguration('luaBundler.minify')
+    ) {
+      updateStatusBarItems(statusBarItem, mappingStatusBarItem);
+    }
+  });
+
+  context.subscriptions.push(
+    bundleCommand,
+    bundleWithConfigCommand,
+    toggleErrorMappingCommand,
+    mappingStatusBarItem,
+    configChangeListener,
+    statusBarItem,
+  );
 }
 
 export function deactivate(): void { }

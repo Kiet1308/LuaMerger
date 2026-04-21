@@ -5,16 +5,18 @@ import { DependencyGraph } from './dependencyGraph';
 import { CodeGenerator } from './codeGenerator';
 import { LuaParser, ParseResult, RequireInfo } from './parser';
 import { PathResolver, ResolvedModule, FolderModule } from './resolver';
-import { moduleNameFromPath } from './utils/pathUtils';
+import { moduleNameFromPath, toPosix } from './utils/pathUtils';
 
 export interface BundleOptions {
   entryPoint: string;
   outputFileName: string;
   minify: boolean;
+  errorMapping: boolean;
 }
 
 export interface ClientScript {
   path: string;
+  displayPath?: string;
   content: string;
   moduleName: string;
 }
@@ -131,6 +133,7 @@ export class LuaBundler {
       graph.addModule(current.moduleName, {
         moduleName: current.moduleName,
         path: current.path,
+        displayPath: this.toDisplayPath(current.path),
         dependencies,
         content: rewritten,
         parseResult,
@@ -159,8 +162,10 @@ export class LuaBundler {
     const generator = new CodeGenerator({
       addComments: true,
       minify: this.options.minify,
-      includeSourceMap: false,
+      includeSourceMap: this.options.errorMapping,
       preserveRequireNames: true,
+      cleanTraceback: this.options.errorMapping,
+      fullFunctionWrapping: this.options.errorMapping,
     });
 
     const output = generator.generate(graph, entryModuleName, clientScripts);
@@ -195,6 +200,7 @@ export class LuaBundler {
 
       clientScripts.push({
         path: filePath,
+        displayPath: this.toDisplayPath(filePath),
         content: rewritten,
         moduleName,
       });
@@ -230,6 +236,11 @@ export class LuaBundler {
       throw new Error(`Entry file not found: ${withExtension}`);
     }
     return withExtension;
+  }
+
+  private toDisplayPath(filePath: string): string {
+    const relative = path.relative(this.workspaceRoot, filePath);
+    return toPosix(relative || path.basename(filePath));
   }
 
   private rewriteRequires(parseResult: ParseResult, deps: ResolvedModule[]): string {

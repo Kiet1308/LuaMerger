@@ -2,6 +2,30 @@
 
 All notable changes to this project are documented in this file.
 
+## [1.4.0] - 2026-04-21
+
+### Added
+- Added single-file runtime error mapping that remaps bundled runtime failures back to the original Lua file and line.
+- Added clean mapped traceback output with readable frame summaries for modules, entry code, methods, local functions, anonymous callbacks, and common async/event callbacks.
+- Added a focused VS Code UX for error mapping with:
+  - one `luaBundler.errorMapping` setting,
+  - one `Lua: Toggle Error Mapping` command,
+  - one status bar toggle that switches between **Mapped Errors** and **Raw Errors**.
+- Added Roblox mapping sample scripts under `RobloxMappingSamples/` to validate mapped runtime errors quickly in Studio.
+
+### Changed
+- Simplified the debugging UX so error mapping is now the only public runtime-debug toggle and is disabled by default until you explicitly turn it on.
+- Updated bundle generation so mapped mode enables the required runtime helpers automatically while raw mode emits normal bundle behavior.
+- Refined packaging/docs for the new release and excluded local sample/test artifacts from VSIX packaging.
+
+### Fixed
+- Fixed the main debugging pain point where runtime errors in bundled Lua only pointed to bundle lines instead of original source files.
+- Fixed deep runtime debugging for nested/local/method/anonymous functions by preserving mapped locations through wrapped execution paths.
+
+### Validation
+- Test suite: `npm test` (16 tests passing).
+- Build: `npm run build` (TypeScript compile passing).
+
 ## [1.3.0] - 2026-02-28
 
 ### Added

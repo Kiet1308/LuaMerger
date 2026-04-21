@@ -4,5 +4,9 @@
 .github/**
 node_modules/**
 test/**
+src/**
+TestCodeBase/**
+RobloxMappingSamples/**
+*.vsix
 .vscodeignore
 **/*.log

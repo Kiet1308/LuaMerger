@@ -4,7 +4,7 @@
   <img src="https://img.shields.io/badge/VS%20Code-Extension-blue?style=for-the-badge&logo=visual-studio-code" alt="VS Code Extension"/>
   <img src="https://img.shields.io/badge/Language-Lua-purple?style=for-the-badge&logo=lua" alt="Lua"/>
   <img src="https://img.shields.io/badge/TypeScript-Built-3178C6?style=for-the-badge&logo=typescript" alt="TypeScript"/>
-  <img src="https://img.shields.io/badge/Version-1.3.0-green?style=for-the-badge" alt="Version 1.3.0"/>
+  <img src="https://img.shields.io/badge/Version-1.4.0-green?style=for-the-badge" alt="Version 1.4.0"/>
 </p>
 
 A powerful VS Code extension that bundles multiple Lua files into a single, runnable output file. Perfect for Roblox development, game scripting, and any Lua project that requires modular code organization.
@@ -36,12 +36,18 @@ A powerful VS Code extension that bundles multiple Lua files into a single, runn
 - Modules are ordered correctly based on dependencies
 - Ensures modules are defined before they are required
 
+### Runtime Error Remapping
+- Bundled output remaps runtime errors back to the original Lua file and line
+- Works for entry code, required modules, named functions, anonymous callbacks, and common async patterns
+- Can be enabled when you want cleaner debugging from the bundled output
+- Keeps everything in a single bundled `.lua` file with no extra `.json` artifacts
+
 ---
 
 ## Installation
 
 ### From VSIX File
-1. Download `lua-bundler-1.3.0.vsix` from the releases
+1. Download `lua-bundler-1.4.0.vsix` from the releases
 2. Open VS Code
 3. Go to Extensions (Ctrl+Shift+X)
 4. Click `...` -> `Install from VSIX...`
@@ -63,11 +69,13 @@ Then press `F5` in VS Code to launch the Extension Development Host.
 ### Quick Bundle
 1. Open any Lua project in VS Code
 2. Click the **Bundle Lua** button in the status bar
-3. The bundled output will be saved to `output.lua`
+3. Use the **Mapped Errors / Raw Errors** status bar toggle to switch runtime error mapping on or off
+4. The bundled output will be saved to `output.lua`
 
 ### Command Palette
 - `Lua: Bundle Files` - Bundle with default settings
-- `Lua: Bundle with Config` - Bundle with custom entry point, output name, and minification options
+- `Lua: Bundle with Config` - Bundle with custom entry point, output name, minification, and error mapping toggle
+- `Lua: Toggle Error Mapping` - Enable/disable mapped runtime errors
 
 ### Context Menu
 Right-click any `.lua` file in the explorer and select **Lua: Bundle Files** to bundle starting from that file's location.
@@ -82,7 +90,8 @@ Configure the extension in VS Code settings (`settings.json`):
 {
   "luaBundler.entryPoint": "init.lua",
   "luaBundler.outputFileName": "output.lua",
-  "luaBundler.minify": false
+  "luaBundler.minify": false,
+  "luaBundler.errorMapping": false
 }
 ```
 
@@ -91,6 +100,7 @@ Configure the extension in VS Code settings (`settings.json`):
 | `luaBundler.entryPoint` | string | `init.lua` | The main entry file to start bundling from |
 | `luaBundler.outputFileName` | string | `output.lua` | Name of the bundled output file |
 | `luaBundler.minify` | boolean | `false` | Remove unnecessary whitespace from output |
+| `luaBundler.errorMapping` | boolean | `false` | Map runtime errors back to the original Lua files and lines using the clean traceback mode |
 
 ---
 
@@ -153,9 +163,10 @@ The bundler generates a self-contained Lua file with:
 2. **Runtime**: Module loading system with `__require`, `__getTreeNode`, `__requireFolder`
 3. **Shared State**: Global shared table `SHARED_VAR`
 4. **Module Tree**: Folder structure initialization
-5. **Modules**: Each module wrapped as a function
-6. **Client Scripts**: `.client.lua` files in `task.spawn()` wrappers
-7. **Entry Point**: Main code execution
+5. **Source Map Runtime**: Inline line map + wrapped runtime helpers for readable errors
+6. **Modules**: Each module wrapped as a function
+7. **Client Scripts**: `.client.lua` files in `task.spawn()` wrappers
+8. **Entry Point**: Main code execution
 
 Example output structure:
 ```lua

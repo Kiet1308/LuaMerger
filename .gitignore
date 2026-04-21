@@ -6,3 +6,4 @@ out/
 .vscode/
 .github/
 .venv/
+RobloxMappingSamples/output.lua
